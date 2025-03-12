@@ -84,12 +84,13 @@ class _PrintScreenState extends State<PrintScreen> {
 
     try {
       Uint8List bytes = Uint8List.fromList(_textController.text.codeUnits);
-
       await _flutterUsbPrinter.write(bytes);
 
-      await _flutterUsbPrinter.write(Uint8List.fromList('\n\n\n\n'.codeUnits));
+      // Thêm chức năng Auto Cut Printer
+      Uint8List cutCommand = Uint8List.fromList([0x1D, 0x56, 0x41, 0x00]); // Lệnh cắt giấy ESC/POS
+      await _flutterUsbPrinter.write(cutCommand);
 
-      _showMessage('Text sent to printer');
+      _showMessage('Text sent to printer with Auto Cut');
     } catch (e) {
       _showMessage('Error printing: $e');
     }
