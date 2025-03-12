@@ -5,7 +5,17 @@ A new Flutter project.
 ## Included library
 [flutter_usb_printer](https://pub.dev/packages/flutter_usb_printer)
 
-## Getting Started
+## Testing
+Download latest APK build from [Release](https://github.com/itsmehoaq/flutter_login_app/releases/latest)
+
+## App usage instruction
+- To show printer page, user needs to be logged in
+  - Login credentials: `admin` / `admin`
+- Once logged in, go to Print screen and connect to USB printer
+- Type any sample text in the input box
+- Once done, press Print to confirm and print the text input
+
+## Development
 
 Install dependencies
 ```
@@ -25,3 +35,4 @@ Modify `flutter_usb_printer` JVM target to `1.8`
         jvmTarget = "1.8"
     }
   }
+
