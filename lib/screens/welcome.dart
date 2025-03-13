@@ -36,7 +36,7 @@ class WelcomeScreen extends StatelessWidget {
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () {
-                  Navigator.pushNamed(context, '/print');  // Add this button
+                  Navigator.pushNamed(context, '/print');
                 },
                 child: const Text('Go to Print Screen'),
               ),

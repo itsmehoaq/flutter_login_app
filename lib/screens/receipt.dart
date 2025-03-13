@@ -2,16 +2,18 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_usb_printer/flutter_usb_printer.dart';
+import 'settings.dart';
 
-class PrintScreen extends StatefulWidget {
-  const PrintScreen({Key? key}) : super(key: key);
+class ReceiptScreen extends StatefulWidget {
+  const ReceiptScreen({Key? key}) : super(key: key);
 
   @override
-  State<PrintScreen> createState() => _PrintScreenState();
+  State<ReceiptScreen> createState() => _ReceiptScreenState();
 }
 
-class _PrintScreenState extends State<PrintScreen> {
-  final FlutterUsbPrinter _flutterUsbPrinter = FlutterUsbPrinter();
+class _ReceiptScreenState extends State<ReceiptScreen> {
+  FlutterUsbPrinter? _flutterUsbPrinter;
+  final FlutterUsbPrinter _usbPrinter = FlutterUsbPrinter();
 
   final TextEditingController _customerNameController = TextEditingController();
   final TextEditingController _receivedAmountController = TextEditingController();
@@ -29,15 +31,13 @@ class _PrintScreenState extends State<PrintScreen> {
     {'name': 'Item D', 'price': 20.0},
   ];
 
-  List<Map<String, dynamic>> _devices = [];
-  Map<String, dynamic>? _selectedDevice;
   bool _isConnected = false;
-  String _status = 'Not connected to any printer';
+  Map<String, dynamic>? _selectedDevice;
+  String _printerStatus = 'Not connected to any printer';
 
   @override
   void initState() {
     super.initState();
-    _getDevices();
     _receivedAmountController.addListener(_validateAndCalculateReturnAmount);
   }
 
@@ -84,44 +84,26 @@ class _PrintScreenState extends State<PrintScreen> {
     }
   }
 
-  Future<void> _getDevices() async {
-    try {
-      List<Map<String, dynamic>> devices = await FlutterUsbPrinter.getUSBDeviceList();
-      setState(() {
-        _devices = devices;
-        _status = 'Found ${devices.length} device(s)';
-      });
-    } catch (e) {
-      setState(() {
-        _status = 'Error getting devices: $e';
-      });
-    }
+  void _handlePrinterConnected(FlutterUsbPrinter printer, bool isConnected, Map<String, dynamic>? device) {
+    setState(() {
+      _flutterUsbPrinter = printer;
+      _isConnected = isConnected;
+      _selectedDevice = device;
+      _printerStatus = _isConnected
+          ? 'Connected to ${_selectedDevice?['manufacturer'] ?? 'Unknown'} ${_selectedDevice?['productName'] ?? 'Printer'}'
+          : 'Not connected to any printer';
+    });
   }
 
-  Future<void> _connectPrinter() async {
-    if (_selectedDevice == null) {
-      _showMessage('Please select a printer first');
-      return;
-    }
-
-    try {
-      bool? isConnected = await _flutterUsbPrinter.connect(
-        int.parse(_selectedDevice!['vendorId']),
-        int.parse(_selectedDevice!['productId']),
-      );
-
-      setState(() {
-        _isConnected = isConnected ?? false;
-        _status = _isConnected
-            ? 'Connected to ${_selectedDevice!['manufacturer']} ${_selectedDevice!['productName']}'
-            : 'Failed to connect to device';
-      });
-    } catch (e) {
-      setState(() {
-        _status = 'Error connecting: $e';
-        _isConnected = false;
-      });
-    }
+  Future<void> _navigateToPrinterSettings() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PrinterSettings(
+          onPrinterConnected: _handlePrinterConnected,
+        ),
+      ),
+    );
   }
 
   String _generateReceiptText() {
@@ -131,7 +113,7 @@ class _PrintScreenState extends State<PrintScreen> {
 
     double subtotal = 50.0;
     double vatRate = 0.08;
-    double vatAmount = subtotal * vatRate / (1 + vatRate); // VAT included calculation
+    double vatAmount = subtotal * vatRate / (1 + vatRate);
     double netAmount = subtotal - vatAmount;
 
     String receipt = '';
@@ -170,15 +152,14 @@ class _PrintScreenState extends State<PrintScreen> {
 
     receipt += '================================\n';
     receipt += '      Thank You For Shopping\n';
-    receipt += '          Please Come Again\n\n\n\n';
+    receipt += '         Please Come Again\n\n\n\n';
 
     return receipt;
   }
 
   Future<void> _printReceipt() async {
-    if (!_isConnected) {
+    if (!_isConnected || _flutterUsbPrinter == null) {
       _showMessage('Please connect to a printer first');
-      await _getDevices();
       return;
     }
 
@@ -195,11 +176,11 @@ class _PrintScreenState extends State<PrintScreen> {
     try {
       String receiptText = _generateReceiptText();
       Uint8List bytes = Uint8List.fromList(receiptText.codeUnits);
-      await _flutterUsbPrinter.write(bytes);
+      await _flutterUsbPrinter!.write(bytes);
 
-      await _flutterUsbPrinter.write(Uint8List.fromList('\n\n\n\n\n'.codeUnits));
+      await _flutterUsbPrinter!.write(Uint8List.fromList('\n\n\n\n\n'.codeUnits));
       Uint8List cutCommand = Uint8List.fromList([0x1D, 0x56, 0x41, 0x00]);
-      await _flutterUsbPrinter.write(cutCommand);
+      await _flutterUsbPrinter!.write(cutCommand);
 
       _showMessage('Receipt sent to printer');
     } catch (e) {
@@ -217,7 +198,14 @@ class _PrintScreenState extends State<PrintScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Receipt Printer'),
+        title: const Text('Receipt Generator'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: _navigateToPrinterSettings,
+            tooltip: 'Printer Settings',
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         child: Padding(
@@ -231,46 +219,30 @@ class _PrintScreenState extends State<PrintScreen> {
                   color: _isConnected ? Colors.green.shade100 : Colors.grey.shade200,
                   borderRadius: BorderRadius.circular(8.0),
                 ),
-                child: Text(
-                  _status,
-                  style: TextStyle(
-                    color: _isConnected ? Colors.green.shade800 : Colors.black87,
-                  ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _isConnected ? Icons.check_circle : Icons.print,
+                      color: _isConnected ? Colors.green.shade800 : Colors.grey.shade700,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _printerStatus,
+                        style: TextStyle(
+                          color: _isConnected ? Colors.green.shade800 : Colors.black87,
+                        ),
+                      ),
+                    ),
+                    if (!_isConnected) ...[
+                      TextButton(
+                        onPressed: _navigateToPrinterSettings,
+                        child: const Text('Connect'),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-
-              if (_devices.isNotEmpty) ...[
-                const Text('Select a printer:'),
-                const SizedBox(height: 8),
-                DropdownButton<Map<String, dynamic>>(
-                  isExpanded: true,
-                  hint: const Text('Select printer'),
-                  value: _selectedDevice,
-                  items: _devices.map((device) {
-                    return DropdownMenuItem<Map<String, dynamic>>(
-                      value: device,
-                      child: Text('${device['manufacturer'] ?? 'Unknown'} ${device['productName'] ?? 'Printer'}'),
-                    );
-                  }).toList(),
-                  onChanged: (Map<String, dynamic>? value) {
-                    setState(() {
-                      _selectedDevice = value;
-                    });
-                  },
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: _connectPrinter,
-                  child: const Text('Connect to Printer'),
-                ),
-              ] else ...[
-                ElevatedButton(
-                  onPressed: _getDevices,
-                  child: const Text('Refresh Devices'),
-                ),
-              ],
-
               const SizedBox(height: 24),
               const Divider(),
               const SizedBox(height: 16),
@@ -290,6 +262,34 @@ class _PrintScreenState extends State<PrintScreen> {
                   labelText: 'Customer Name',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.person),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              TextField(
+                controller: _receivedAmountController,
+                decoration: InputDecoration(
+                  labelText: 'Received Amount',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.attach_money),
+                  errorText: _receivedAmountError ? _receivedAmountErrorText : null,
+                  helperText: 'Maximum amount: \$9,999',
+                ),
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(4),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              TextField(
+                controller: _returnAmountController,
+                readOnly: true,
+                decoration: const InputDecoration(
+                  labelText: 'Change Amount',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.payments),
                 ),
               ),
               const SizedBox(height: 16),
@@ -338,53 +338,27 @@ class _PrintScreenState extends State<PrintScreen> {
                   );
                 },
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
               const Divider(),
-              ListTile(
-                title: const Text('Subtotal (8% VAT included)', style: TextStyle(fontWeight: FontWeight.bold)),
-                trailing: const Text('\$50.00', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
               const SizedBox(height: 16),
 
-              TextField(
-                controller: _receivedAmountController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
-                ],
-                decoration: InputDecoration(
-                  labelText: 'Received Amount (\$)',
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.attach_money),
-                  errorText: _receivedAmountError ? _receivedAmountErrorText : null,
-                  hintText: 'Min \$50.00',
-                ),
+              const Text(
+                'Summary:',
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 16),
-
-              // Return Amount (calculated)
-              TextField(
-                controller: _returnAmountController,
-                readOnly: true,
-                decoration: const InputDecoration(
-                  labelText: 'Change Amount (\$)',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.money_off),
-                  filled: true,
-                  fillColor: Color(0xFFEEEEEE),
-                ),
+              const SizedBox(height: 8),
+              const ListTile(
+                title: Text('Subtotal'),
+                trailing: Text('\$50.00'),
               ),
               const SizedBox(height: 24),
 
-              // Print Button
               ElevatedButton.icon(
                 onPressed: _printReceipt,
                 icon: const Icon(Icons.print),
                 label: const Text('Print Receipt'),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
               ),
             ],

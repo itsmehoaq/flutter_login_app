@@ -46,6 +46,12 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
+  void _skipSignIn() {
+    widget.onLogin();
+
+    Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -80,6 +86,24 @@ class _SignInScreenState extends State<SignInScreen> {
               child: _isLoading
                   ? const CircularProgressIndicator()
                   : const Text('Sign In'),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: _skipSignIn,
+              child: const Text('Skip Sign In'),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Skip sign in for demo purposes only',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[500],
+                fontStyle: FontStyle.italic,
+              ),
             ),
           ],
         ),
