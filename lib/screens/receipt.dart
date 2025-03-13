@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_usb_printer/flutter_usb_printer.dart';
 import 'settings.dart';
+import 'qr.dart';
 
 class ReceiptScreen extends StatefulWidget {
   const ReceiptScreen({Key? key}) : super(key: key);
@@ -34,6 +35,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   bool _isConnected = false;
   Map<String, dynamic>? _selectedDevice;
   String _printerStatus = 'Not connected to any printer';
+  Map<String, dynamic>? _selectedScanner;
 
   @override
   void initState() {
@@ -95,12 +97,19 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     });
   }
 
+  void _handleScannerConnected(Map<String, dynamic>? device) {
+    setState(() {
+      _selectedScanner = device;
+    });
+  }
+
   Future<void> _navigateToPrinterSettings() async {
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => PrinterSettings(
           onPrinterConnected: _handlePrinterConnected,
+          onScannerConnected: _handleScannerConnected,
         ),
       ),
     );
@@ -163,6 +172,22 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       return;
     }
 
+    try {
+      String receiptText = _generateReceiptText();
+      Uint8List bytes = Uint8List.fromList(receiptText.codeUnits);
+      await _flutterUsbPrinter!.write(bytes);
+
+      await _flutterUsbPrinter!.write(Uint8List.fromList('\n\n\n\n\n'.codeUnits));
+      Uint8List cutCommand = Uint8List.fromList([0x1D, 0x56, 0x41, 0x00]);
+      await _flutterUsbPrinter!.write(cutCommand);
+
+      _showMessage('Receipt printed successfully');
+    } catch (e) {
+      _showMessage('Error printing: $e');
+    }
+  }
+
+  Future<void> _navigateToQRPaymentScreen() async {
     if (_customerNameController.text.isEmpty) {
       _showMessage('Please enter customer name');
       return;
@@ -173,18 +198,23 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       return;
     }
 
-    try {
-      String receiptText = _generateReceiptText();
-      Uint8List bytes = Uint8List.fromList(receiptText.codeUnits);
-      await _flutterUsbPrinter!.write(bytes);
+    final paymentCompleted = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => QRPaymentScreen(
+          customerName: _customerNameController.text,
+          amount: 50.0,
+          scanner: _selectedScanner,
+          onPrintReceipt: _printReceipt,
+        ),
+      ),
+    );
 
-      await _flutterUsbPrinter!.write(Uint8List.fromList('\n\n\n\n\n'.codeUnits));
-      Uint8List cutCommand = Uint8List.fromList([0x1D, 0x56, 0x41, 0x00]);
-      await _flutterUsbPrinter!.write(cutCommand);
-
-      _showMessage('Receipt sent to printer');
-    } catch (e) {
-      _showMessage('Error printing: $e');
+    if (paymentCompleted == true) {
+      _showMessage('Payment completed successfully');
+      _customerNameController.clear();
+      _receivedAmountController.clear();
+      _returnAmountController.text = '0.00';
     }
   }
 
@@ -307,7 +337,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                     },
                   ),
                   const Text('Card'),
-                  const SizedBox(width: 20),
+                  const SizedBox(width: 16),
                   Radio<String>(
                     value: 'Cash',
                     groupValue: _paymentMethod,
@@ -320,45 +350,56 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                   const Text('Cash'),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
 
               const Text(
-                'Items (Fixed):',
-                style: TextStyle(fontWeight: FontWeight.bold),
+                'Order Summary',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 8),
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _items.length,
-                itemBuilder: (context, index) {
-                  return ListTile(
-                    title: Text(_items[index]['name']),
-                    trailing: Text('\$${_items[index]['price'].toStringAsFixed(2)}'),
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              const Divider(),
-              const SizedBox(height: 16),
-
-              const Text(
-                'Summary:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              const ListTile(
-                title: Text('Subtotal'),
-                trailing: Text('\$50.00'),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Items:',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      ..._items.map((item) => Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(item['name']),
+                          Text('\$${item['price'].toStringAsFixed(2)}'),
+                        ],
+                      )),
+                      const Divider(),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: const [
+                          Text('Subtotal:'),
+                          Text('\$50.00'),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: 24),
 
               ElevatedButton.icon(
-                onPressed: _printReceipt,
-                icon: const Icon(Icons.print),
-                label: const Text('Print Receipt'),
+                onPressed: _navigateToQRPaymentScreen,
+                icon: const Icon(Icons.payment),
+                label: const Text('CHECK OUT'),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16.0),
                 ),
               ),
             ],
