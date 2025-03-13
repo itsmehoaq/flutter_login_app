@@ -8,12 +8,17 @@ A new Flutter project.
 ## Testing
 Download latest APK build from [Release](https://github.com/itsmehoaq/flutter_login_app/releases/latest)
 
-## App usage instruction
+## Workflow & Usage instruction
 - To show printer page, user needs to be logged in
-  - Login credentials: `admin` / `admin`
-- Once logged in, go to Print screen and connect to USB printer
-- Type any sample text in the input box
-- Once done, press Print to confirm and print the text input
+  - Login credentials are currently not needed, for testing use the Skip button
+- Once logged in, go to Receipt screen
+- On first app start, Printer connection must be done manually (the kiosk printer is already selected). Press **Connect** button on top of the screen
+- If success, app shows notification of connected to printer
+- Fill information about bill in the input boxes below
+- Press **Checkout** button to continue
+- On QR screen, press either buttons to confirm payment
+  - Currently QR screen not showing an usable QR code. Both buttons on this screen are for demo purposes
+- Upon success payment, press Print button to print receipt and return to receipt screen
 
 ## Development
 
