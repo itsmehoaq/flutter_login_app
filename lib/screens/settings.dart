@@ -105,6 +105,7 @@ class _PrinterSettingsState extends State<PrinterSettings> {
       });
 
       _autoSelectDefaultPrinter(devices);
+      _autoSelectDefaultScanner(devices);
     } catch (e) {
       setState(() {
         _printerStatus = 'Error getting devices: $e';
@@ -121,6 +122,20 @@ class _PrinterSettingsState extends State<PrinterSettings> {
           _selectedPrinter = device;
         });
         _connectPrinter();
+        break;
+      }
+    }
+  }
+
+  void _autoSelectDefaultScanner(List<Map<String, dynamic>> devices) {
+    for (var device in devices) {
+      if ((device['manufacturer'] == 'CROWN' &&
+          device['productName'] == 'CROWN Barcode KeyBorad FS') ||
+          (device['deviceName'] == '/dev/bus/usb/002/005')) {
+        setState(() {
+          _selectedScanner = device;
+        });
+        _connectScanner();
         break;
       }
     }
@@ -334,7 +349,7 @@ class _PrinterSettingsState extends State<PrinterSettings> {
                   items: _devices.map((device) {
                     return DropdownMenuItem<Map<String, dynamic>>(
                       value: device,
-                      child: Text('${device['manufacturer'] ?? 'Unknown'} ${device['productName'] ?? 'Device'}'),
+                      child: Text('${device['manufacturer'] ?? 'Unknown'} ${device['productName'] ?? 'Unknown'}'),
                     );
                   }).toList(),
                   onChanged: (Map<String, dynamic>? value) {
@@ -347,63 +362,45 @@ class _PrinterSettingsState extends State<PrinterSettings> {
                 ElevatedButton(
                   onPressed: _connectScanner,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.purple,
+                    backgroundColor: Colors.blue,
                     foregroundColor: Colors.white,
                   ),
-                  child: const Text('Connect to QR Scanner'),
+                  child: const Text('Connect to Scanner'),
+                ),
+              ] else ...[
+                ElevatedButton(
+                  onPressed: _getDevices,
+                  child: const Text('Refresh Devices'),
                 ),
               ],
 
-              if (_showCameraPreview) ...[
+              if (_showCameraPreview && _isCameraInitialized) ...[
                 const SizedBox(height: 24),
-                _buildCameraPreview(),
+                const Text('Camera Preview:'),
+                const SizedBox(height: 8),
+                Container(
+                  height: 200,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: _isCameraLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : CameraPreview(_cameraController!),
+                  ),
+                ),
               ],
 
               const SizedBox(height: 24),
-              const Divider(),
-              const SizedBox(height: 16),
-
-              if (_isPrinterConnected || _isScannerConnected) ...[
-                const Text(
-                  'Connected Devices',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                if (_isPrinterConnected) ...[
-                  _buildConnectedDeviceInfo(
-                    'Printer',
-                    '${_selectedPrinter?['manufacturer'] ?? 'Unknown'} ${_selectedPrinter?['productName'] ?? 'Printer'}',
-                    Colors.green,
-                    Icons.print,
-                  ),
-                  const SizedBox(height: 8),
-                ],
-
-                if (_isScannerConnected) ...[
-                  _buildConnectedDeviceInfo(
-                    'QR Scanner',
-                    '${_selectedScanner?['manufacturer'] ?? 'Unknown'} ${_selectedScanner?['productName'] ?? 'Scanner'}',
-                    Colors.blue,
-                    Icons.qr_code_scanner,
-                  ),
-                  const SizedBox(height: 8),
-                ],
-              ],
-
-              const SizedBox(height: 16),
               ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                },
+                onPressed: _getDevices,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
+                  backgroundColor: Colors.grey.shade200,
+                  foregroundColor: Colors.black87,
                 ),
-                child: const Text('Return to Receipt Screen'),
+                child: const Text('Refresh All Devices'),
               ),
             ],
           ),
@@ -415,7 +412,7 @@ class _PrinterSettingsState extends State<PrinterSettings> {
   Widget _buildSectionHeader(String title, IconData icon) {
     return Row(
       children: [
-        Icon(icon, color: Colors.grey[700]),
+        Icon(icon, color: Colors.blue.shade700),
         const SizedBox(width: 8),
         Text(
           title,
@@ -425,124 +422,6 @@ class _PrinterSettingsState extends State<PrinterSettings> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildConnectedDeviceInfo(String type, String name, Color color, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withAlpha(30),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withAlpha(100)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: color),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  type,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
-                ),
-                Text(
-                  name,
-                  style: const TextStyle(
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCameraPreview() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Camera Preview',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          height: 250,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.black,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: _isCameraLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _isCameraInitialized
-                ? CameraPreview(_cameraController!)
-                : _buildCameraPlaceholder(),
-          ),
-        ),
-        const SizedBox(height: 8),
-        if (_isCameraInitialized) ...[
-          Text(
-            'QR scanning ready',
-            style: TextStyle(
-              color: Colors.green.shade700,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ] else ...[
-          Row(
-            children: [
-              Icon(Icons.info_outline, size: 16, color: Colors.orange.shade800),
-              const SizedBox(width: 8),
-              Text(
-                'Camera access required for QR scanning',
-                style: TextStyle(
-                  color: Colors.orange.shade800,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildCameraPlaceholder() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.camera_alt,
-            color: Colors.white54,
-            size: 48,
-          ),
-          SizedBox(height: 16),
-          Text(
-            'Camera Preview',
-            style: TextStyle(color: Colors.white),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Camera access required',
-            style: TextStyle(color: Colors.white70, fontSize: 12),
-          ),
-        ],
-      ),
     );
   }
 }

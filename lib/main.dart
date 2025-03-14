@@ -1,4 +1,3 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
 import 'screens/welcome.dart';
 import 'screens/signin.dart';
@@ -18,9 +17,8 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  bool _isLoggedIn = false;
+  bool _isLoggedIn = true; // force login to be always true
 
-  // Printer connection state that can be shared across screens
   bool _isPrinterConnected = false;
   Map<String, dynamic>? _connectedPrinter;
 
